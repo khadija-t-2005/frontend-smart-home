@@ -6,6 +6,9 @@ export interface CartItemDTO {
   productName: string;
   quantity: number;
   unitPrice: number;
+  variantId?: number;
+  variantColor?: string;
+  variantImageUrl?: string;
 }
 
 export interface CartDTO {
@@ -16,23 +19,21 @@ export interface CartDTO {
 
 export interface AddToCartDTO {
   productId: number;
+  variantId?: number;
   quantity: number;
 }
 
 const cartService = {
-  // GET /api/cart/:userId  → CartDTO
   getCart: (userId: number) =>
     api.get<CartDTO>(`/cart/${userId}`),
 
-  // POST /api/cart/:userId/add  body: { productId, quantity }  → CartDTO
-  addToCart: (userId: number, productId: number, quantity: number) =>
-    api.post<CartDTO>(`/cart/${userId}/add`, { productId, quantity } as AddToCartDTO),
+  // ✅ Accepte maintenant variantId
+  addToCart: (userId: number, productId: number, quantity: number, variantId?: number) =>
+    api.post<CartDTO>(`/cart/${userId}/add`, { productId, variantId, quantity } as AddToCartDTO),
 
-  // DELETE /api/cart/item/:cartItemId  → 204
   removeItem: (cartItemId: number) =>
     api.delete(`/cart/item/${cartItemId}`),
 
-  // DELETE /api/cart/:userId/clear  → 204
   clearCart: (userId: number) =>
     api.delete(`/cart/${userId}/clear`),
 };

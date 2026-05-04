@@ -4,21 +4,56 @@ import { useAuthStore } from '../store/authStore';
 import { useCartStore } from '../store/cartStore';
 import cartService from '../services/cart.service';
 import orderService from '../services/order.service';
+import variantService from '../services/variant.service';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
-import { Trash2, ShoppingBag, ArrowRight, Minus, Plus } from 'lucide-react';
+import { Trash2, ShoppingBag, ArrowRight } from 'lucide-react';
+
+// Composant image — utilise variantImageUrl si disponible, sinon charge le premier variant
+function CartItemImage({ productId, productName, variantImageUrl }: {
+  productId: number;
+  productName: string;
+  variantImageUrl?: string;
+}) {
+  const [imgUrl, setImgUrl] = useState<string | null>(variantImageUrl || null);
+
+  useEffect(() => {
+    // Si on a déjà l'image du variant choisi, on l'utilise directement
+    if (variantImageUrl) {
+      setImgUrl(variantImageUrl);
+      return;
+    }
+    // Sinon on charge le premier variant
+    variantService.getVariants(productId)
+      .then(res => {
+        if (res.data.length > 0 && res.data[0].imageUrl) {
+          setImgUrl(res.data[0].imageUrl);
+        }
+      })
+      .catch(() => setImgUrl(null));
+  }, [productId, variantImageUrl]);
+
+  return (
+    <div className="w-16 h-16 bg-[#e6f4f6] rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center">
+      {imgUrl ? (
+        <img src={imgUrl} alt={productName} className="w-full h-full object-cover" />
+      ) : (
+        <span className="text-2xl">📦</span>
+      )}
+    </div>
+  );
+}
 
 export default function Cart() {
   const navigate = useNavigate();
   const user     = useAuthStore((s) => s.user);
   const { cart, setCart, clearCart } = useCartStore();
 
-  const [loading,   setLoading]   = useState(false);
-  const [checking,  setChecking]  = useState(false);
-  const [error,     setError]     = useState('');
-  const [success,   setSuccess]   = useState('');
+  const [loading,  setLoading]  = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [error,    setError]    = useState('');
+  const [success,  setSuccess]  = useState('');
 
-  // Charger le panier depuis le backend au montage
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
     setLoading(true);
@@ -35,9 +70,7 @@ export default function Cart() {
         const res = await cartService.getCart(Number(user.id));
         setCart(res.data);
       }
-    } catch {
-      setError("Erreur lors de la suppression");
-    }
+    } catch { setError("Erreur lors de la suppression"); }
   };
 
   const handleClear = async () => {
@@ -45,24 +78,19 @@ export default function Cart() {
     try {
       await cartService.clearCart(Number(user.id));
       clearCart();
-    } catch {
-      setError("Erreur lors du vidage du panier");
-    }
+    } catch { setError("Erreur lors du vidage du panier"); }
   };
 
   const handleCheckout = async () => {
     if (!user) return;
-    setChecking(true);
-    setError('');
+    setChecking(true); setError('');
     try {
       await orderService.checkout(Number(user.id));
       clearCart();
       setSuccess('Commande passée avec succès ! Merci pour votre achat.');
     } catch (err: any) {
       setError(err.message || 'Erreur lors de la commande');
-    } finally {
-      setChecking(false);
-    }
+    } finally { setChecking(false); }
   };
 
   const items = cart?.items ?? [];
@@ -80,6 +108,7 @@ export default function Cart() {
       </div>
 
       <div className="max-w-5xl mx-auto px-6 py-10">
+
         {error && (
           <div className="bg-red-50 border border-red-100 text-red-600 text-sm rounded-2xl px-5 py-4 mb-6">
             {error}
@@ -115,35 +144,42 @@ export default function Cart() {
 
         {!loading && items.length > 0 && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Items list */}
+
+            {/* ── Liste articles ── */}
             <div className="lg:col-span-2 space-y-4">
               {items.map((item) => (
                 <div key={item.id}
                   className="bg-white rounded-2xl border border-gray-100 p-5 flex items-center gap-5 hover:border-[#4a9aaa]/30 transition">
-                  {/* Visual */}
-                  <div className="w-16 h-16 bg-[#e6f4f6] rounded-xl flex items-center justify-center flex-shrink-0">
-                    <span className="text-2xl">📦</span>
-                  </div>
-                  {/* Info */}
+
+                  {/* Image via variant */}
+                  <CartItemImage productId={item.productId} productName={item.productName} variantImageUrl={item.variantImageUrl} />
+
+                  {/* Infos */}
                   <div className="flex-1 min-w-0">
                     <h3 className="font-bold text-[#1a2f38] text-sm truncate">{item.productName}</h3>
+                    {item.variantColor && (
+                      <span className="text-xs text-gray-400">Couleur : {item.variantColor}</span>
+                    )}
                     <p className="text-[#4a9aaa] font-black text-base mt-0.5">
                       {item.unitPrice.toLocaleString('fr-MA')} DH
                     </p>
                   </div>
-                  {/* Quantity */}
+
+                  {/* Quantité */}
                   <div className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-1.5">
                     <span className="text-xs text-gray-400">Qté</span>
                     <span className="font-bold text-[#1a2f38] text-sm w-5 text-center">{item.quantity}</span>
                   </div>
-                  {/* Subtotal */}
+
+                  {/* Sous-total */}
                   <div className="text-right hidden sm:block">
                     <p className="text-xs text-gray-400">Sous-total</p>
                     <p className="font-black text-[#1a2f38]">
                       {(item.unitPrice * item.quantity).toLocaleString('fr-MA')} DH
                     </p>
                   </div>
-                  {/* Remove */}
+
+                  {/* Supprimer */}
                   <button onClick={() => handleRemove(item.id)}
                     className="text-gray-300 hover:text-red-400 transition p-2 rounded-xl hover:bg-red-50">
                     <Trash2 size={16} />
@@ -157,7 +193,7 @@ export default function Cart() {
               </button>
             </div>
 
-            {/* Summary */}
+            {/* ── Récapitulatif ── */}
             <div className="lg:col-span-1">
               <div className="bg-white rounded-2xl border border-gray-100 p-6 sticky top-28">
                 <h2 className="font-black text-[#1a2f38] text-lg mb-5">Récapitulatif</h2>
@@ -182,13 +218,11 @@ export default function Cart() {
 
                 {total < 500 && (
                   <p className="text-xs text-[#4a9aaa] bg-[#e6f4f6] rounded-xl px-3 py-2 mb-4">
-                    Ajoutez pour {(500 - total).toLocaleString('fr-MA')} DH de plus pour la livraison gratuite !
+                    Ajoutez {(500 - total).toLocaleString('fr-MA')} DH de plus pour la livraison gratuite !
                   </p>
                 )}
 
-                <button
-                  onClick={handleCheckout}
-                  disabled={checking}
+                <button onClick={handleCheckout} disabled={checking}
                   className="w-full bg-[#1a2f38] text-white font-bold py-4 rounded-2xl hover:bg-[#4a9aaa] transition flex items-center justify-center gap-2 group disabled:opacity-60">
                   {checking ? 'Traitement...' : (
                     <>
@@ -202,7 +236,6 @@ export default function Cart() {
           </div>
         )}
       </div>
-
       <Footer />
     </div>
   );
